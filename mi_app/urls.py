@@ -18,6 +18,7 @@ router.register(r'menu-lotes', views.MenuLotesViewSet)
 router.register(r'menu-historial-precios', views.MenuHistorialPreciosViewSet)
 router.register(r'menu-proveedores', views.MenuProveedoresViewSet)
 router.register(r'cat-tipos-movimiento', views.CatTiposMovimientoViewSet)
+router.register(r'menu-movimientos', views.MenuMovimientosViewSet)
 router.register(r'menu-productos', views.MenuProductosViewSet)
 
 urlpatterns = [

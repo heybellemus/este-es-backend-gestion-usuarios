@@ -322,7 +322,7 @@ class MenuLotes(models.Model):
     )
     ganancia_formateada = ComputedCharField(max_length=50, blank=True, null=True, editable=False)
     fecha_vencimiento_lote = models.DateField(blank=True, null=True)
-    fecha_ingreso_lote = models.DateTimeField(blank=True, null=True)
+    fecha_ingreso_lote = models.DateTimeField(auto_now_add=True)
     id_proveedor = models.IntegerField(
         db_column="id_proveedor",
         blank=True,
@@ -372,10 +372,10 @@ class MenuMovimientos(models.Model):
         blank=True,
         null=True,
     )
-    tipo_movimiento = models.CharField(max_length=20, blank=True, null=True)
+    tipo_movimiento = models.CharField(max_length=20, blank=True, null=True, db_column='codigo_tipo_movimiento')
     cantidad_movimiento = models.IntegerField()
     precio_unitario_movimiento = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    fecha_movimiento = models.DateTimeField(blank=True, null=True)
+    fecha_movimiento = models.DateTimeField(auto_now_add=True)
     motivo_movimiento = models.CharField(max_length=255, blank=True, null=True)
     documento_referencia_movimiento = models.CharField(max_length=50, blank=True, null=True)
     observaciones_movimiento = models.TextField(blank=True, null=True)
@@ -413,8 +413,9 @@ class MenuProveedores(models.Model):
     datos_bancarios = models.TextField(blank=True, null=True, db_column='datos_bancarios')
     observaciones = models.TextField(blank=True, null=True, db_column='observaciones')
     activo = models.BooleanField(db_column='activo')
-    fecha_creacion = models.DateTimeField(db_column='fecha_creacion')
-    fecha_modificacion = models.DateTimeField(blank=True, null=True, db_column='fecha_modificacion')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         managed = False
@@ -444,7 +445,7 @@ class MenuHistorialPrecios(models.Model):
     precio_compra_nuevo = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     precio_venta_anterior = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     precio_venta_nuevo = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    fecha_cambio_precio = models.DateTimeField(blank=True, null=True)
+    fecha_cambio_precio = models.DateTimeField(auto_now_add=True)
     usuario_cambio = models.CharField(max_length=100, blank=True, null=True)
     motivo_cambio = models.CharField(max_length=255, blank=True, null=True)
 

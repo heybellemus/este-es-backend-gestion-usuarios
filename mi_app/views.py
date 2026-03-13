@@ -27,6 +27,7 @@ from .models import (
     MenuCategorias,
     MenuHistorialPrecios,
     MenuLotes,
+    MenuMovimientos,
     MenuProductos,
     MenuProveedores,
     MenuUnidadesMedida,
@@ -47,6 +48,7 @@ from .serializers import (
     MenuCategoriasSerializer,
     MenuHistorialPreciosSerializer,
     MenuLotesSerializer,
+    MenuMovimientosSerializer,
     MenuProductosSerializer,
     MenuProveedoresSerializer,
     MenuUnidadesMedidaSerializer,
@@ -354,6 +356,14 @@ class MenuProveedoresViewSet(viewsets.ModelViewSet):
 class CatTiposMovimientoViewSet(viewsets.ModelViewSet):
     queryset = CatTiposMovimiento.objects.all().order_by("orden", "id_tipo_movimiento")
     serializer_class = CatTiposMovimientoSerializer
+
+
+class MenuMovimientosViewSet(viewsets.ModelViewSet):
+    queryset = MenuMovimientos.objects.all().order_by("-id_movimiento")
+    serializer_class = MenuMovimientosSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(usuario_id=self.request.user)
 
 
 # ============================================

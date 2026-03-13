@@ -103,11 +103,12 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 from .models import (
     MenuCategorias,
-    MenuUnidadesMedida,
-    MenuProductos,
-    MenuLotes,
     MenuHistorialPrecios,
+    MenuLotes,
+    MenuMovimientos,
+    MenuProductos,
     MenuProveedores,
+    MenuUnidadesMedida,
     CatTiposMovimiento,
 )
 
@@ -154,3 +155,10 @@ class MenuProveedoresSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuProveedores
         fields = '__all__'
+
+
+class MenuMovimientosSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MenuMovimientos
+        fields = '__all__'
+        read_only_fields = ('usuario_id',)

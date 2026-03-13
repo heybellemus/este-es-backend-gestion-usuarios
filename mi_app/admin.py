@@ -1,21 +1,24 @@
 # mi_app/admin.py
 from django.contrib import admin
 from .models import (
+    CatTiposMovimiento,
     Clientes,
     Departamentos,
-    Roles,
-    Usuarios,
-    Permisos,
-    RolPermisos,
-    Pantallas,
-    RolPantallas,
     MenuCategorias,
-    MenuUnidadesMedida,
-    MenuProductos,
-    MenuLotes,
     MenuHistorialPrecios,
+    MenuLotes,
+    MenuMovimientos,
+    MenuProductos,
     MenuProveedores,
-    CatTiposMovimiento,
+    MenuUnidadesMedida,
+    Pantallas,
+    PasswordResetToken,
+    Permisos,
+    Roles,
+    RolPantallas,
+    RolPermisos,
+    SesionesQR,
+    Usuarios,
 )
 
 @admin.register(Clientes)
@@ -271,3 +274,52 @@ class MenuHistorialPreciosAdmin(admin.ModelAdmin):
     list_filter = ('fecha_cambio_precio',)
     search_fields = ('id_producto__nombre_producto', 'id_producto__sku_producto', 'usuario_cambio', 'motivo_cambio')
     readonly_fields = ('id_historial_precio',)
+
+
+@admin.register(MenuMovimientos)
+class MenuMovimientosAdmin(admin.ModelAdmin):
+    list_display = (
+        'id_movimiento',
+        'id_producto',
+        'id_lote',
+        'tipo_movimiento',
+        'cantidad_movimiento',
+        'precio_unitario_movimiento',
+        'fecha_movimiento',
+        'id_tipo_movimiento',
+        'usuario_id',
+    )
+    list_filter = ('tipo_movimiento', 'fecha_movimiento', 'id_tipo_movimiento')
+    search_fields = (
+        'id_producto__nombre_producto',
+        'id_producto__sku_producto',
+        'motivo_movimiento',
+        'documento_referencia_movimiento',
+        'usuario_id__nombreusuario',
+    )
+    readonly_fields = ('id_movimiento',)
+    
+    fieldsets = (
+        ('Información del Movimiento', {
+            'fields': (
+                'id_producto',
+                'id_lote',
+                'id_tipo_movimiento',
+                'tipo_movimiento',
+                'cantidad_movimiento',
+                'precio_unitario_movimiento',
+            )
+        }),
+        ('Detalles Adicionales', {
+            'fields': (
+                'fecha_movimiento',
+                'motivo_movimiento',
+                'documento_referencia_movimiento',
+                'observaciones_movimiento',
+            )
+        }),
+        ('Auditoría', {
+            'fields': ('usuario_id', 'id_movimiento'),
+            'classes': ('collapse',)
+        }),
+    )
