@@ -1,5 +1,8 @@
 # mi_app/admin.py
 from django.contrib import admin
+from django.db import transaction
+
+from .sqlserver_session import get_usuario_id_from_user, sqlserver_usuario_context
 from .models import (
     CatTiposMovimiento,
     Clientes,
@@ -167,7 +170,7 @@ class MenuUnidadesMedidaAdmin(admin.ModelAdmin):
     readonly_fields = ('id_unidad_medida',)
 
 @admin.register(MenuProductos)
-class MenuProductos(admin.ModelAdmin):
+class MenuProductosAdmin(admin.ModelAdmin):
     list_display = (
         'id_producto',
         'id_categoria',
@@ -175,7 +178,7 @@ class MenuProductos(admin.ModelAdmin):
         'nombre_producto',
         'sku_producto',
         'descripcion_producto',
-        'stock_actual_producto',
+        'stock_actual_producto',  # Mostrar como solo lectura
         'stock_minimo_producto',
         'stock_maximo_producto',
         'ubicacion_producto',
@@ -186,7 +189,40 @@ class MenuProductos(admin.ModelAdmin):
     )
     list_filter = ('activo_producto',)
     search_fields = ('nombre_producto','sku_producto','descripcion_producto')
-    readonly_fields = ('id_producto',)
+    readonly_fields = ('id_producto', 'stock_actual_producto')  # Stock actual es solo lectura
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': (
+                'id_categoria',
+                'id_unidad_medida',
+                'nombre_producto',
+                'sku_producto',
+                'descripcion_producto',
+            )
+        }),
+        ('Control de Stock', {
+            'fields': (
+                'stock_actual_producto',  # Solo lectura - actualizado por triggers
+                'stock_minimo_producto',
+                'stock_maximo_producto',
+            ),
+            'description': 'El stock actual se actualiza automáticamente mediante lotes y movimientos'
+        }),
+        ('Información Adicional', {
+            'fields': (
+                'ubicacion_producto',
+                'imagen_url_producto',
+                'activo_producto',
+            )
+        }),
+        ('Auditoría', {
+            'fields': (
+                'id_producto',
+            ),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(MenuLotes)
@@ -232,12 +268,17 @@ class MenuLotesAdmin(admin.ModelAdmin):
         ('Información Adicional', {
             'fields': (
                 'fecha_vencimiento_lote',
-                'fecha_ingreso_lote',
                 'activo_lote',
                 'observaciones_lote',
             )
         }),
     )
+
+    def save_model(self, request, obj, form, change):
+        usuario_id = get_usuario_id_from_user(request.user)
+        with transaction.atomic():
+            with sqlserver_usuario_context(usuario_id):
+                super().save_model(request, obj, form, change)
 
 
 
@@ -297,7 +338,7 @@ class MenuMovimientosAdmin(admin.ModelAdmin):
         'documento_referencia_movimiento',
         'usuario_id__nombreusuario',
     )
-    readonly_fields = ('id_movimiento',)
+    readonly_fields = ('id_movimiento', 'fecha_movimiento')
     
     fieldsets = (
         ('Información del Movimiento', {

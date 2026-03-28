@@ -41,6 +41,7 @@ from .models import (
     Usuarios,
 )
 from .permissions import obtener_pantallas_usuario, usuario_tiene_acceso_pantalla
+from .sqlserver_session import get_usuario_id_from_user, sqlserver_usuario_context
 from .serializers import (
     CatTiposMovimientoSerializer,
     ClientesSerializer,
@@ -60,6 +61,8 @@ from .serializers import (
     RolesSerializer,
     RolPantallasSerializer,
     RolPermisosSerializer,
+    SalidaPEPSSerializer,
+    ProcesarMermasSerializer,
     UsuariosSerializer,
 )
 
@@ -342,6 +345,13 @@ class MenuLotesViewSet(viewsets.ModelViewSet):
     queryset = MenuLotes.objects.all().order_by("id_lote")
     serializer_class = MenuLotesSerializer
 
+    def perform_create(self, serializer):
+        usuario_id = get_usuario_id_from_user(self.request.user)
+        with transaction.atomic():
+            with sqlserver_usuario_context(usuario_id):
+                instance = serializer.save()
+        instance._usuario_id = usuario_id
+
 
 class MenuHistorialPreciosViewSet(viewsets.ModelViewSet):
     queryset = MenuHistorialPrecios.objects.all().order_by("-fecha_cambio_precio", "-id_historial_precio")
@@ -361,9 +371,36 @@ class CatTiposMovimientoViewSet(viewsets.ModelViewSet):
 class MenuMovimientosViewSet(viewsets.ModelViewSet):
     queryset = MenuMovimientos.objects.all().order_by("-id_movimiento")
     serializer_class = MenuMovimientosSerializer
-
+    
     def perform_create(self, serializer):
-        serializer.save(usuario_id=self.request.user)
+        # Guardar el movimiento primero
+        movimiento = serializer.save(
+            usuario_id=self.request.user,
+            nombre_usuario=f"{self.request.user.nombre} {self.request.user.apellido}"
+        )
+        
+        # Actualizar la cantidad disponible del lote
+        if movimiento.id_lote and movimiento.id_tipo_movimiento:
+            lote = movimiento.id_lote
+            cantidad_movimiento = movimiento.cantidad_movimiento
+            signo = movimiento.id_tipo_movimiento.signo
+            
+            if signo == '-':
+                # Movimiento de salida: restar cantidad
+                lote.cantidad_disponible_lote -= cantidad_movimiento
+            elif signo == '+':
+                # Movimiento de entrada: sumar cantidad
+                lote.cantidad_disponible_lote += cantidad_movimiento
+            elif signo == '+/-':
+                # Transferencia: puede ser entrada o salida según el contexto
+                # Por ahora lo tratamos como salida (restar)
+                lote.cantidad_disponible_lote -= cantidad_movimiento
+            
+            # Asegurar que no sea negativo
+            lote.cantidad_disponible_lote = max(0, lote.cantidad_disponible_lote)
+            
+            # Guardar los cambios en el lote
+            lote.save()
 
 
 # ============================================
@@ -815,3 +852,133 @@ def login_con_qr(request):
     if not codigo:
         return Response({"error": "code es requerido"}, status=400)
     return verificar_estado_qr(request, codigo)
+
+
+# ============================================
+# NUEVOS ENDPOINTS PARA LÓGICA PEPS Y CONTROL DE INVENTARIO
+# ============================================
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def registrar_salida_peps(request):
+    """
+    Registrar salida de inventario usando método PEPS (Primeras Entradas, Primeras Salidas)
+    """
+    serializer = SalidaPEPSSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    id_producto = serializer.validated_data["id_producto"]
+    cantidad_a_descontar = serializer.validated_data["cantidad_a_descontar"]
+    id_tipo_movimiento = serializer.validated_data["id_tipo_movimiento"]
+    motivo = serializer.validated_data.get("motivo", "Salida PEPS")
+    
+    # Obtener usuario_id del request
+    usuario_id = request.user.usuarioid if hasattr(request.user, 'usuarioid') else 1
+    
+    with connection.cursor() as cursor:
+        try:
+            cursor.execute(
+                "EXEC sp_RegistrarSalidaPEPS @id_producto=%s, @cantidad_a_descontar=%s, @usuario_id=%s, @id_tipo_movimiento=%s, @motivo=%s",
+                [id_producto, cantidad_a_descontar, usuario_id, id_tipo_movimiento, motivo]
+            )
+            data = _dictfetchall(cursor) if cursor.description else [{"mensaje": "Salida PEPS registrada correctamente"}]
+            return Response(data[0] if data else {"mensaje": "Salida PEPS registrada correctamente"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def control_inventario_lotes(request):
+    """
+    Vista de control de inventario por lotes con estado y alertas
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM vw_Control_Inventario_Lotes ORDER BY [Fecha_Ingreso] ASC")
+        data = _dictfetchall(cursor)
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def control_inventario_proximos_vencer(request):
+    """
+    Obtener lotes próximos a vencer (30 días o menos)
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM vw_Control_Inventario_Lotes WHERE Estado_Lote = 'PRÓXIMO A VENCER' ORDER BY Dias_para_Vencer ASC")
+        data = _dictfetchall(cursor)
+    return Response(data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def procesar_mermas_vencidas(request):
+    """
+    Procesar automáticamente mermas de productos vencidos
+    """
+    serializer = ProcesarMermasSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    usuario_id = serializer.validated_data["usuario_id"]
+    
+    with connection.cursor() as cursor:
+        try:
+            cursor.execute("EXEC sp_ProcesarMermasVencidas @usuario_id=%s", [usuario_id])
+            data = _dictfetchall(cursor) if cursor.description else [{"mensaje": "Mermas procesadas correctamente"}]
+            return Response(data[0] if data else {"mensaje": "Mermas procesadas correctamente"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def verificar_triggers_activos(request):
+    """
+    Verificar si los nuevos triggers están activos en la base de datos
+    """
+    with connection.cursor() as cursor:
+        try:
+            # Verificar triggers existentes
+            cursor.execute("""
+                SELECT 
+                    name AS trigger_name,
+                    parent_name AS table_name,
+                    is_disabled
+                FROM sys.triggers 
+                WHERE parent_name IN ('menu_lotes', 'menu_movimientos')
+                ORDER BY parent_name, name
+            """)
+            triggers = _dictfetchall(cursor)
+            
+            # Verificar stored procedures
+            cursor.execute("""
+                SELECT 
+                    name AS procedure_name,
+                    create_date,
+                    modify_date
+                FROM sys.procedures 
+                WHERE name IN ('sp_RegistrarSalidaPEPS', 'sp_ProcesarMermasVencidas')
+                ORDER BY name
+            """)
+            procedures = _dictfetchall(cursor)
+            
+            # Verificar vista
+            cursor.execute("""
+                SELECT 
+                    name AS view_name,
+                    create_date,
+                    modify_date
+                FROM sys.views 
+                WHERE name = 'vw_Control_Inventario_Lotes'
+            """)
+            views = _dictfetchall(cursor)
+            
+            return Response({
+                "triggers": triggers,
+                "procedures": procedures,
+                "views": views,
+                "status": "OK"
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

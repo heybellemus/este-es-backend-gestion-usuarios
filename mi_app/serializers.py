@@ -1,5 +1,6 @@
 # mi_app/serializers.py
 from rest_framework import serializers
+from django.core.exceptions import ValidationError
 from .models import Clientes
 
 class ClientesSerializer(serializers.ModelSerializer):
@@ -112,6 +113,7 @@ from .models import (
     CatTiposMovimiento,
 )
 
+from django.utils import timezone
 
 class MenuCategoriasSerializer(serializers.ModelSerializer):
     class Meta:
@@ -129,14 +131,22 @@ class MenuProductosSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuProductos
         fields = '__all__'
+        read_only_fields = ('stock_actual_producto',)  # Stock actual es solo lectura, se actualiza via triggers
 
 
 class MenuLotesSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuLotes
         fields = '__all__'
-
-
+    
+    def validate(self, data):
+        try:
+            # Validar fecha de vencimiento
+            if data.get('fecha_vencimiento_lote') and data['fecha_vencimiento_lote'] < timezone.now().date():
+                raise ValidationError('No se puede insertar un lote con fecha de vencimiento pasada.')
+            return data
+        except ValidationError as e:
+            raise serializers.ValidationError(str(e))
 
 
 class MenuHistorialPreciosSerializer(serializers.ModelSerializer):
@@ -161,4 +171,37 @@ class MenuMovimientosSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuMovimientos
         fields = '__all__'
-        read_only_fields = ('usuario_id',)
+        read_only_fields = ('usuario_id', 'nombre_usuario')  # Se asignan automáticamente en el viewset
+    
+    def validate(self, data):
+        try:
+            # Validar stock suficiente para movimientos de salida
+            if data.get('id_producto') and data.get('tipo_movimiento') and data.get('cantidad_movimiento'):
+                tipos_salida = ['VENTA', 'TRANSFERENCIA', 'AJUSTE-', 'DEVOLUCION_P']
+                
+                if data['tipo_movimiento'] in tipos_salida:
+                    producto = data['id_producto']
+                    stock_actual = producto.stock_actual_producto or 0
+                    
+                    if stock_actual - data['cantidad_movimiento'] < 0:
+                        raise ValidationError(
+                            f'Stock insuficiente para el producto ID: {producto.id_producto}. '
+                            f'Stock actual: {stock_actual}, requerido: {data["cantidad_movimiento"]}'
+                        )
+            
+            return data
+        except ValidationError as e:
+            raise serializers.ValidationError(str(e))
+
+
+# Serializer para solicitud de salida PEPS
+class SalidaPEPSSerializer(serializers.Serializer):
+    id_producto = serializers.IntegerField(required=True)
+    cantidad_a_descontar = serializers.IntegerField(required=True, min_value=1)
+    id_tipo_movimiento = serializers.IntegerField(required=True)
+    motivo = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+# Serializer para procesamiento de mermas
+class ProcesarMermasSerializer(serializers.Serializer):
+    usuario_id = serializers.IntegerField(required=True)

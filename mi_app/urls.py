@@ -84,6 +84,13 @@ urlpatterns = [
     path('confirmar-recuperacion/', views.confirmar_recuperacion_password, name='confirmar_recuperacion'),
     path('verificar-token/<str:token>/', views.verificar_token_recuperacion, name='verificar_token'),
     path('tokens-recuperacion/', views.listar_tokens_recuperacion, name='listar_tokens_recuperacion'),
+
+    # Nuevas rutas para lógica PEPS y control de inventario
+    path('api/inventario/registrar-salida-peps/', views.registrar_salida_peps, name='registrar_salida_peps'),
+    path('api/inventario/control-lotes/', views.control_inventario_lotes, name='control_inventario_lotes'),
+    path('api/inventario/proximos-vencer/', views.control_inventario_proximos_vencer, name='control_inventario_proximos_vencer'),
+    path('api/inventario/procesar-mermas/', views.procesar_mermas_vencidas, name='procesar_mermas_vencidas'),
+    path('api/inventario/verificar-triggers/', views.verificar_triggers_activos, name='verificar_triggers_activos'),
 ]
 
 

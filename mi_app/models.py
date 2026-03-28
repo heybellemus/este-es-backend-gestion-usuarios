@@ -290,17 +290,21 @@ class MenuProductos(models.Model):
     nombre_producto = models.CharField(max_length=100)
     sku_producto = models.CharField(max_length=20, unique=True)
     descripcion_producto = models.CharField(max_length=255, blank=True, null=True)
-    stock_actual_producto = models.IntegerField(blank=True, null=True)
-    stock_minimo_producto = models.IntegerField(blank=True, null=True)
-    stock_maximo_producto = models.IntegerField(blank=True, null=True)
+    stock_actual_producto = models.IntegerField(default=0, blank=True, null=True)
+    stock_minimo_producto = models.IntegerField(default=0, blank=True, null=True)
+    stock_maximo_producto = models.IntegerField(default=0, blank=True, null=True)
     ubicacion_producto = models.CharField(max_length=50, blank=True, null=True)
     imagen_url_producto = models.CharField(max_length=255, blank=True, null=True)
-    activo_producto = models.BooleanField(blank=True, null=True)
+    activo_producto = models.BooleanField(default=True, blank=True, null=True)
     fecha_creacion_producto = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion_producto = models.DateTimeField(auto_now_add=True)
+    
     class Meta:
         managed = False
         db_table = "menu_productos"
+        indexes = [
+            models.Index(fields=['id_producto'], name='idx_productos_id'),
+        ]
 
 
 class MenuLotes(models.Model):
@@ -323,10 +327,12 @@ class MenuLotes(models.Model):
     ganancia_formateada = ComputedCharField(max_length=50, blank=True, null=True, editable=False)
     fecha_vencimiento_lote = models.DateField(blank=True, null=True)
     fecha_ingreso_lote = models.DateTimeField(auto_now_add=True)
-    id_proveedor = models.IntegerField(
+    id_proveedor = models.ForeignKey(
+        "MenuProveedores",
         db_column="id_proveedor",
-        blank=True,
-        null=True,
+        on_delete=models.DO_NOTHING,
+        blank=False,
+        null=False,
     )
     activo_lote = models.BooleanField(blank=True, null=True)
     observaciones_lote = models.TextField(blank=True, null=True)
@@ -334,6 +340,10 @@ class MenuLotes(models.Model):
     class Meta:
         managed = False
         db_table = "menu_lotes"
+        indexes = [
+            models.Index(fields=['id_producto'], name='idx_lotes_producto'),
+            models.Index(fields=['fecha_vencimiento_lote'], name='idx_lotes_vencimiento'),
+        ]
 
 
 class CatTiposMovimiento(models.Model):
@@ -390,13 +400,22 @@ class MenuMovimientos(models.Model):
         Usuarios,
         db_column="usuario_id",
         on_delete=models.DO_NOTHING,
+        blank=False,
+        null=False,
     )
+    nombre_usuario = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
         managed = False
         db_table = "menu_movimientos"
         verbose_name = 'Movimiento'
         verbose_name_plural = 'Movimientos'
+        indexes = [
+            models.Index(fields=['id_producto', 'fecha_movimiento'], name='idx_movimientos_producto'),
+            models.Index(fields=['id_lote'], name='idx_movimientos_lote'),
+            models.Index(fields=['tipo_movimiento'], name='idx_movimientos_tipo'),
+            models.Index(fields=['fecha_movimiento'], name='idx_movimientos_fecha'),
+        ]
 
     def __str__(self):
         return f"Movimiento {self.id_movimiento} - {self.tipo_movimiento}"
